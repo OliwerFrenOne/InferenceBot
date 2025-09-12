@@ -29,7 +29,32 @@ function buildCommands() {
         .setRequired(true)
     );
 
-  return [ask.toJSON()];
+  const summarize = new SlashCommandBuilder()
+    .setName('summarize')
+    .setDescription('Summarize recent messages in this channel')
+    .addIntegerOption(option =>
+      option
+        .setName('limit')
+        .setDescription('How many recent messages to include (10-1000)')
+        .setRequired(false)
+        .setMinValue(10)
+        .setMaxValue(1000)
+    )
+    .addBooleanOption(option =>
+      option
+        .setName('include_bots')
+        .setDescription('Include messages from bots')
+        .setRequired(false)
+    )
+    .addStringOption(option =>
+      option
+        .setName('model')
+        .setDescription('Model to use (optional)')
+        .setRequired(false)
+        .addChoices(...MODEL_CHOICES.map((m) => ({ name: m, value: m })))
+    );
+
+  return [ask.toJSON(), summarize.toJSON()];
 }
 
 async function register() {

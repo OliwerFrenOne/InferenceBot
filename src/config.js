@@ -15,4 +15,5 @@ module.exports = {
   discordGuildId: () => getEnv('DISCORD_GUILD_ID'),
   llmApiKey: () => getEnv('LLM_API_KEY'),
   llmApiBase: () => getEnv('LLM_API_BASE'),
+  llmDefaultModel: () => getEnv('LLM_DEFAULT_MODEL', 'asi1-mini'),
 };
