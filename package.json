@@ -5,7 +5,12 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "register": "node src/register-commands.js",
-    "start": "node src/bot.js"
+    "start": "node src/bot.js",
+    "docker:build": "docker build -t inferencebot .",
+    "docker:run": "docker-compose up -d",
+    "docker:stop": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "deploy": "npm run register && npm start"
   },
   "repository": {
     "type": "git",
