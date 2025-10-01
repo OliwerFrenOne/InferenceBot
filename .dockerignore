@@ -11,3 +11,4 @@ Dockerfile
 docker-compose.yml
 logs/*
 *.log
+.bot-ready
