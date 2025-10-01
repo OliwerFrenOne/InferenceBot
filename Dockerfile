@@ -1,5 +1,5 @@
 # Use official Node.js runtime as base image
-FROM node:22-alpine
+FROM node:18-alpine
 
 # Set working directory in container
 WORKDIR /app
@@ -23,9 +23,12 @@ RUN addgroup -g 1001 -S nodejs && \
 
 USER nextjs
 
-# Health check - verify bot is actually connected to Discord
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD node -e "const fs=require('fs'); const file='/app/.bot-ready'; if(!fs.existsSync(file)) process.exit(1); const age=Date.now()-parseInt(fs.readFileSync(file)); if(age>60000) process.exit(1);" || exit 1
+# Expose port (not required for Discord bots, but good practice)
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "console.log('Bot is running')" || exit 1
 
 # Start the bot
 CMD ["npm", "start"]

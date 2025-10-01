@@ -1,4 +1,4 @@
-const { REST, Routes, SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { REST, Routes, SlashCommandBuilder } = require('discord.js');
 const { discordToken, discordClientId, discordGuildId } = require('./config');
 
 const MODEL_CHOICES = [
@@ -32,7 +32,6 @@ function buildCommands() {
   const summarize = new SlashCommandBuilder()
     .setName('summarize')
     .setDescription('Summarize recent messages in this channel')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addIntegerOption(option =>
       option
         .setName('limit')
@@ -55,18 +54,13 @@ function buildCommands() {
         .addChoices(...MODEL_CHOICES.map((m) => ({ name: m, value: m })))
     );
 
-  const toggleModelRestriction = new SlashCommandBuilder()
-    .setName('toggle_model_restriction')
-    .setDescription('Toggle model restriction for non-admins (limits them to asi1-mini)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
-
-  return [ask.toJSON(), summarize.toJSON(), toggleModelRestriction.toJSON()];
+  return [ask.toJSON(), summarize.toJSON()];
 }
 
 async function register() {
-  const rest = new REST({ version: '10' }).setToken(discordToken);
-  const clientId = discordClientId;
-  const guildId = discordGuildId;
+  const rest = new REST({ version: '10' }).setToken(discordToken());
+  const clientId = discordClientId();
+  const guildId = discordGuildId();
 
   const commands = buildCommands();
 

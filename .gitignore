@@ -17,9 +17,6 @@ logs
 *.log
 *.log.*
 
-# Runtime
-.bot-ready
-
 # Editor
 .vscode/
 .idea/
