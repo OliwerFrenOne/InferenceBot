@@ -11,3 +11,4 @@ Dockerfile
 docker-compose.yml
 logs/*
 *.log
+.models-cache.json

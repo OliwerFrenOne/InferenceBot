@@ -17,6 +17,9 @@ logs
 *.log
 *.log.*
 
+# Runtime/Cache
+.models-cache.json
+
 # Editor
 .vscode/
 .idea/

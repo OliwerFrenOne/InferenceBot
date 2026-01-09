@@ -1,17 +1,13 @@
-const { REST, Routes, SlashCommandBuilder } = require('discord.js');
-const { discordToken, discordClientId, discordGuildId } = require('./config');
+const { REST, Routes, SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { discordToken, discordClientId, discordGuildId, llmApiKey, llmApiBase } = require('./config');
+const { getAvailableModels, getModelChoices } = require('./llmModels');
 
-const MODEL_CHOICES = [
-  'asi1-mini',
-  'google/gemma-3-27b-it',
-  'openai/gpt-oss-20b',
-  'meta-llama/llama-3.3-70b-instruct',
-  'mistralai/mistral-nemo',
-  'qwen/qwen3-32b',
-  'z-ai/glm-4.5-air',
-];
-
-function buildCommands() {
+/**
+ * Build slash commands with the provided model choices
+ * @param {Array<{name: string, value: string}>} modelChoices - Discord choice format
+ * @returns {Object[]} Array of command JSON objects
+ */
+function buildCommands(modelChoices) {
   const ask = new SlashCommandBuilder()
     .setName('askllm')
     .setDescription('Ask a question to a selected LLM model')
@@ -20,7 +16,7 @@ function buildCommands() {
         .setName('model')
         .setDescription('Model to use')
         .setRequired(true)
-        .addChoices(...MODEL_CHOICES.map((m) => ({ name: m, value: m })))
+        .addChoices(...modelChoices)
     )
     .addStringOption(option =>
       option
@@ -51,18 +47,35 @@ function buildCommands() {
         .setName('model')
         .setDescription('Model to use (optional)')
         .setRequired(false)
-        .addChoices(...MODEL_CHOICES.map((m) => ({ name: m, value: m })))
+        .addChoices(...modelChoices)
     );
 
-  return [ask.toJSON(), summarize.toJSON()];
+  const refreshModels = new SlashCommandBuilder()
+    .setName('refresh_models')
+    .setDescription('Refresh the available models list from the API (admin only)')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
+
+  return [ask.toJSON(), summarize.toJSON(), refreshModels.toJSON()];
 }
 
-async function register() {
-  const rest = new REST({ version: '10' }).setToken(discordToken());
-  const clientId = discordClientId();
-  const guildId = discordGuildId();
+/**
+ * Register slash commands with Discord
+ * @param {boolean} forceRefreshModels - Force refresh models from API
+ * @returns {Promise<string[]>} The list of models that were registered
+ */
+async function register(forceRefreshModels = false) {
+  const token = discordToken;
+  const clientId = discordClientId;
+  const guildId = discordGuildId;
+  const apiKey = llmApiKey;
+  const apiBase = llmApiBase;
 
-  const commands = buildCommands();
+  // Fetch available models from API
+  const models = await getAvailableModels(apiBase, apiKey, forceRefreshModels);
+  const modelChoices = getModelChoices(models);
+  
+  const rest = new REST({ version: '10' }).setToken(token);
+  const commands = buildCommands(modelChoices);
 
   try {
     await rest.put(
@@ -70,6 +83,7 @@ async function register() {
       { body: commands }
     );
     console.log('Slash commands registered for guild:', guildId);
+    console.log('Registered models:', models);
   } catch (err) {
     const code = err?.code || err?.rawError?.code;
     if (code === 50001) {
@@ -80,13 +94,15 @@ async function register() {
       throw err;
     }
   }
+  
+  return models;
 }
 
 if (require.main === module) {
-  register().catch((err) => {
+  register(true).catch((err) => {
     console.error('Failed to register commands', err?.response?.data || err);
     process.exit(1);
   });
 }
 
-module.exports = { register };
+module.exports = { register, buildCommands };

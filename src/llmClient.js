@@ -9,8 +9,8 @@ const { llmApiKey, llmApiBase } = require('./config');
  * @returns {Promise<string>} assistant message content
  */
 async function createChatCompletion({ model, messages }) {
-  const baseUrl = llmApiBase();
-  const apiKey = llmApiKey();
+  const baseUrl = llmApiBase;
+  const apiKey = llmApiKey;
 
   const url = baseUrl.replace(/\/$/, '') + '/chat/completions';
 

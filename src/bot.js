@@ -1,6 +1,7 @@
 const { Client, GatewayIntentBits, Partials, Events } = require('discord.js');
 const { discordToken, llmDefaultModel } = require('./config');
 const { createChatCompletion } = require('./llmClient');
+const { register } = require('./register-commands');
 
 function formatFinalMessage({ askedBy, question, model, answer }) {
   return `**Asked by:** ${askedBy}\n**Question:** ${question}\n**Model:** ${model}\n**Answer:**\n${answer}`;
@@ -30,8 +31,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const userTag = interaction.user?.tag || interaction.user?.username || String(userId || 'unknown');
     const userMention = userId ? `<@${userId}>` : userTag;
 
-    // Acknowledge the interaction without creating a visible reply chain
-    await interaction.deferReply({ flags: 64 }).catch(() => {});
+    // Acknowledge the interaction - return early if this fails
+    try {
+      await interaction.deferReply();
+    } catch (err) {
+      console.error('Failed to defer reply (askllm):', err.message);
+      return;
+    }
 
     try {
       const answer = await createChatCompletion({
@@ -44,28 +50,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       console.log('LLM answer', { user: userTag, model, question });
 
-      // Prefer a normal channel post; if we don't have permission, fall back to interaction follow-up
+      // Edit the deferred reply with the answer
       const final = formatFinalMessage({ askedBy: userMention, question, model, answer });
-      try {
-        await interaction.deleteReply();
-      } catch (_) {}
-      try {
-        await interaction.channel?.send(final);
-      } catch (sendErr) {
-        const code = sendErr?.code || sendErr?.rawError?.code || sendErr?.status;
-        if (code === 50001 || code === 50013 || code === 403) {
-          // Avoid posting a reply in-channel; DM the user instead
-          try {
-            await interaction.user?.send(final);
-            try { await interaction.editReply({ content: 'I do not have permission to post in that channel. I have sent you a DM instead.', flags: 64 }); } catch (_) {}
-          } catch (_) {
-            // As a last resort, fall back to a follow-up
-            try { await interaction.followUp(final); } catch { await interaction.editReply(final); }
-          }
-        } else {
-          throw sendErr;
-        }
-      }
+      await interaction.editReply(final);
     } catch (err) {
       console.error('LLM error', { user: userTag, model, question, error: err?.response?.data || err });
 
@@ -81,13 +68,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const requestedLimit = interaction.options.getInteger('limit') || 200;
     const includeBots = interaction.options.getBoolean('include_bots') || false;
     const explicitModel = interaction.options.getString('model') || null;
-    const model = explicitModel || llmDefaultModel();
+    const model = explicitModel || llmDefaultModel;
     const userId = interaction.user?.id;
     const userTag = interaction.user?.tag || interaction.user?.username || String(userId || 'unknown');
     const userMention = userId ? `<@${userId}>` : userTag;
 
     const limit = Math.max(10, Math.min(1000, requestedLimit));
-    await interaction.deferReply({ flags: 64 }).catch(() => {});
+    
+    // Acknowledge the interaction - return early if this fails
+    try {
+      await interaction.deferReply();
+    } catch (err) {
+      console.error('Failed to defer reply (summarize):', err.message);
+      return;
+    }
 
     try {
       // Fetch and accumulate recent messages
@@ -137,19 +131,47 @@ client.on(Events.InteractionCreate, async (interaction) => {
       });
 
       const final = formatFinalMessage({ askedBy: userMention, question: `Summarize last ${plain.length} messages`, model, answer });
-      try { await interaction.deleteReply(); } catch (_) {}
-      try { await interaction.channel?.send(final); }
-      catch (sendErr) {
-        const code = sendErr?.code || sendErr?.rawError?.code || sendErr?.status;
-        if (code === 50001 || code === 50013 || code === 403) {
-          try { await interaction.user?.send(final); try { await interaction.editReply({ content: 'I DMed you the summary (no permission to post here).', flags: 64 }); } catch (_) {} } catch (_) { try { await interaction.followUp(final); } catch { await interaction.editReply(final); } }
-        } else {
-          throw sendErr;
-        }
-      }
+      await interaction.editReply(final);
     } catch (err) {
       console.error('Summarize error', err?.response?.data || err);
       try { await interaction.editReply('Sorry, I could not summarize this channel.'); } catch (_) {}
+    }
+    return;
+  }
+
+  // /refresh_models command (admin only)
+  if (interaction.commandName === 'refresh_models') {
+    // Check if user has administrator permissions
+    if (!interaction.member?.permissions?.has('Administrator')) {
+      try {
+        await interaction.reply({ 
+          content: 'Only administrators can use this command.', 
+          flags: 64 
+        });
+      } catch (_) {}
+      return;
+    }
+
+    // Acknowledge the interaction - return early if this fails
+    try {
+      await interaction.deferReply({ flags: 64 });
+    } catch (err) {
+      console.error('Failed to defer reply (refresh_models):', err.message);
+      return;
+    }
+
+    try {
+      console.log('Refreshing models from API...');
+      const models = await register(true); // Force refresh from API
+      
+      const message = `✅ **Models refreshed successfully!**\n\n**Available models (${models.length}):**\n${models.map(m => `• ${m}`).join('\n')}`;
+      await interaction.editReply(message);
+      console.log('Models refreshed:', models);
+    } catch (err) {
+      console.error('Failed to refresh models:', err?.response?.data || err);
+      try {
+        await interaction.editReply('❌ Failed to refresh models. Check the bot logs for details.');
+      } catch (_) {}
     }
     return;
   }
@@ -181,7 +203,7 @@ client.on(Events.MessageCreate, async (message) => {
     const authorId = message.author?.id;
     const userTag = message.author?.tag || message.author?.username || String(authorId || 'unknown');
     const userMention = authorId ? `<@${authorId}>` : userTag;
-    const model = llmDefaultModel();
+    const model = llmDefaultModel;
     let thinkingMsg = null;
     try {
       thinkingMsg = await message.channel.send('Thinking…');
@@ -216,4 +238,4 @@ client.on(Events.MessageCreate, async (message) => {
   }
 });
 
-client.login(discordToken());
+client.login(discordToken);
